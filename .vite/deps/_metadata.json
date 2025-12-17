@@ -1,0 +1,61 @@
+{
+  "hash": "7d7434df",
+  "configHash": "04ccdc4f",
+  "lockfileHash": "aa7bb1b4",
+  "browserHash": "17dfd86b",
+  "optimized": {
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "05c4224e",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "7a2c96b4",
+      "needsInterop": true
+    },
+    "@dnd-kit/core": {
+      "src": "../../node_modules/@dnd-kit/core/dist/core.esm.js",
+      "file": "@dnd-kit_core.js",
+      "fileHash": "6c39946e",
+      "needsInterop": false
+    },
+    "@dnd-kit/sortable": {
+      "src": "../../node_modules/@dnd-kit/sortable/dist/sortable.esm.js",
+      "file": "@dnd-kit_sortable.js",
+      "fileHash": "c22f188d",
+      "needsInterop": false
+    },
+    "uuid": {
+      "src": "../../node_modules/uuid/dist/esm-browser/index.js",
+      "file": "uuid.js",
+      "fileHash": "411b297f",
+      "needsInterop": false
+    },
+    "@dnd-kit/utilities": {
+      "src": "../../node_modules/@dnd-kit/utilities/dist/utilities.esm.js",
+      "file": "@dnd-kit_utilities.js",
+      "fileHash": "987a5cec",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-SWCIS6FL": {
+      "file": "chunk-SWCIS6FL.js"
+    },
+    "chunk-AUSEWYIV": {
+      "file": "chunk-AUSEWYIV.js"
+    },
+    "chunk-PABLUP5Q": {
+      "file": "chunk-PABLUP5Q.js"
+    },
+    "chunk-2VHV66RP": {
+      "file": "chunk-2VHV66RP.js"
+    },
+    "chunk-5WRI5ZAA": {
+      "file": "chunk-5WRI5ZAA.js"
+    }
+  }
+}

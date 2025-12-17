@@ -1,0 +1,214 @@
+.auth-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.auth-modal {
+  position: relative;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 400px;
+  padding: var(--spacing-2xl);
+  animation: scaleIn 0.3s ease-out;
+  box-shadow: var(--shadow-lg);
+}
+
+.auth-modal-close {
+  position: absolute;
+  top: var(--spacing-md);
+  right: var(--spacing-md);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.auth-modal-close:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.auth-modal-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.auth-modal-header {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.auth-logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.auth-logo-icon {
+  width: 48px;
+  height: 48px;
+  position: relative;
+}
+
+.auth-logo-block {
+  position: absolute;
+  border-radius: 6px;
+}
+
+.auth-logo-block-1 {
+  width: 22px;
+  height: 32px;
+  background: var(--color-accent-amber);
+  top: 8px;
+  left: 6px;
+}
+
+.auth-logo-block-2 {
+  width: 16px;
+  height: 22px;
+  background: var(--color-accent-coral);
+  top: 8px;
+  right: 6px;
+}
+
+.auth-modal-header h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-xs);
+}
+
+.auth-modal-header p {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.auth-field label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.auth-field input {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  transition: all var(--transition-fast);
+}
+
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--color-accent-amber);
+  background: var(--color-bg-card);
+}
+
+.auth-field input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.auth-error {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(231, 111, 81, 0.1);
+  border: 1px solid rgba(231, 111, 81, 0.3);
+  border-radius: var(--radius-md);
+  color: var(--color-accent-coral);
+  font-size: 0.8125rem;
+}
+
+.auth-submit {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-accent-amber);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-bg-primary);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+}
+
+.auth-submit:hover:not(:disabled) {
+  background: var(--color-accent-coral);
+}
+
+.auth-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.auth-loading svg {
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.auth-footer {
+  margin-top: var(--spacing-lg);
+  text-align: center;
+}
+
+.auth-footer p {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.auth-footer button {
+  background: none;
+  border: none;
+  color: var(--color-accent-amber);
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.auth-footer button:hover {
+  color: var(--color-accent-coral);
+}
