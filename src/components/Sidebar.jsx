@@ -165,7 +165,7 @@ function Sidebar({ boards, activeBoard, onSelectBoard, collapsed, onToggleCollap
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
                     <span className={`nav-icon board-icon color-${board.color}`}>
-                      {icons[board.icon] || icons.folder}
+                      {icons[board.icon] || (board.icon?.length <= 2 ? board.icon : icons.folder)}
                     </span>
                     {!collapsed && <span className="nav-label">{board.name}</span>}
                     {activeBoard === board.id && <span className="active-indicator"></span>}

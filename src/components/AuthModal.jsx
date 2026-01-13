@@ -24,15 +24,22 @@ function AuthModal({ onClose }) {
       return
     }
 
-    try {
-      if (mode === 'login') {
-        await login(email, password)
-      } else {
-        await signup(name, email, password)
-      }
+    if (mode === 'signup' && password.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+
+    let result
+    if (mode === 'login') {
+      result = await login(email, password)
+    } else {
+      result = await signup(name, email, password)
+    }
+
+    if (result.success) {
       onClose()
-    } catch (err) {
-      setError('Something went wrong. Please try again.')
+    } else {
+      setError(result.error || 'Something went wrong. Please try again.')
     }
   }
 

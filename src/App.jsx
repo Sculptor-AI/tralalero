@@ -1,76 +1,92 @@
-import { useState, useCallback } from 'react'
-import { v4 as uuidv4 } from 'uuid'
+import { useState, useCallback, useEffect } from 'react'
 import Sidebar from './components/Sidebar'
 import Board from './components/Board'
 import { BoardProvider, useBoard } from './context/BoardContext'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import './App.css'
 
 const BOARD_COLORS = ['coral', 'amber', 'sage', 'sky', 'violet']
 const BOARD_ICONS = ['rocket', 'megaphone', 'palette', 'folder', 'star']
 
-const initialBoards = [
-  { id: 'board-1', name: 'Product Roadmap', icon: 'rocket', color: 'coral' },
-  { id: 'board-2', name: 'Marketing Campaign', icon: 'megaphone', color: 'amber' },
-  { id: 'board-3', name: 'Design System', icon: 'palette', color: 'sage' },
-]
-
 function AppContent() {
-  const [activeBoard, setActiveBoard] = useState('board-1')
-  const [boards, setBoards] = useState(initialBoards)
+  const { isLoading: authLoading } = useAuth()
+  const { boardsList, createBoard, renameBoard, deleteBoard, initializeBoard, isLoading: boardsLoading } = useBoard()
+  const [activeBoard, setActiveBoard] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const { initializeBoard, deleteBoard: deleteBoardData } = useBoard()
 
-  const addBoard = useCallback((name) => {
-    const newId = `board-${uuidv4()}`
-    const colorIndex = boards.length % BOARD_COLORS.length
-    const iconIndex = boards.length % BOARD_ICONS.length
-    setBoards(prev => [...prev, {
-      id: newId,
-      name,
-      icon: BOARD_ICONS[iconIndex],
-      color: BOARD_COLORS[colorIndex]
-    }])
-    initializeBoard(newId)
-    setActiveBoard(newId)
-    return newId
-  }, [boards.length, initializeBoard])
+  // Set initial active board when boards list loads
+  useEffect(() => {
+    if (boardsList.length > 0 && !activeBoard) {
+      setActiveBoard(boardsList[0].id)
+    } else if (boardsList.length > 0 && !boardsList.find(b => b.id === activeBoard)) {
+      // Active board was deleted, select first board
+      setActiveBoard(boardsList[0].id)
+    }
+  }, [boardsList, activeBoard])
 
-  const renameBoard = useCallback((boardId, newName) => {
-    setBoards(prev => prev.map(board =>
-      board.id === boardId ? { ...board, name: newName } : board
-    ))
-  }, [])
+  const handleAddBoard = useCallback(async (name) => {
+    const colorIndex = boardsList.length % BOARD_COLORS.length
+    const iconIndex = boardsList.length % BOARD_ICONS.length
+    try {
+      const newBoard = await createBoard(name, BOARD_ICONS[iconIndex], BOARD_COLORS[colorIndex])
+      setActiveBoard(newBoard.id)
+    } catch (err) {
+      console.error('Failed to create board:', err)
+    }
+  }, [boardsList.length, createBoard])
 
-  const deleteBoard = useCallback((boardId) => {
-    deleteBoardData(boardId)
-    setBoards(prev => {
-      const newBoards = prev.filter(b => b.id !== boardId)
-      if (activeBoard === boardId && newBoards.length > 0) {
-        setActiveBoard(newBoards[0].id)
-      }
-      return newBoards
-    })
-  }, [activeBoard, deleteBoardData])
+  const handleRenameBoard = useCallback(async (boardId, newName) => {
+    await renameBoard(boardId, newName)
+  }, [renameBoard])
+
+  const handleDeleteBoard = useCallback(async (boardId) => {
+    await deleteBoard(boardId)
+  }, [deleteBoard])
+
+  const handleSelectBoard = useCallback((boardId) => {
+    setActiveBoard(boardId)
+    initializeBoard(boardId)
+  }, [initializeBoard])
+
+  // Show loading state
+  if (authLoading) {
+    return (
+      <div className="app loading-screen">
+        <div className="loading-content">
+          <div className="loading-logo">
+            <div className="logo-icon">
+              <span className="logo-block logo-block-1"></span>
+              <span className="logo-block logo-block-2"></span>
+            </div>
+          </div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app">
       <Sidebar
-        boards={boards}
+        boards={boardsList}
         activeBoard={activeBoard}
-        onSelectBoard={setActiveBoard}
+        onSelectBoard={handleSelectBoard}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-        onAddBoard={addBoard}
-        onRenameBoard={renameBoard}
-        onDeleteBoard={deleteBoard}
+        onAddBoard={handleAddBoard}
+        onRenameBoard={handleRenameBoard}
+        onDeleteBoard={handleDeleteBoard}
       />
       <main className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-        {boards.length > 0 ? (
+        {boardsList.length > 0 && activeBoard ? (
           <Board
             boardId={activeBoard}
-            boardName={boards.find(b => b.id === activeBoard)?.name}
+            boardName={boardsList.find(b => b.id === activeBoard)?.name}
           />
+        ) : boardsLoading ? (
+          <div className="no-boards">
+            <p>Loading boards...</p>
+          </div>
         ) : (
           <div className="no-boards">
             <p>No boards yet. Create one to get started!</p>

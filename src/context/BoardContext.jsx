@@ -1,9 +1,12 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
+import { boards as boardsApi, columns as columnsApi, cards as cardsApi, getAuthToken } from '../utils/api'
+import { useAuth } from './AuthContext'
 
 const BoardContext = createContext(null)
 
-const initialData = {
+// Default data for guests (not logged in)
+const guestData = {
   'board-1': {
     columns: [
       {
@@ -67,14 +70,72 @@ const initialData = {
 }
 
 export function BoardProvider({ children }) {
-  const [boardData, setBoardData] = useState(initialData)
+  const { isAuthenticated, user } = useAuth()
+  const [boardData, setBoardData] = useState({})
+  const [boardsList, setBoardsList] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
 
-  const moveCard = useCallback((boardId, sourceColId, destColId, sourceIndex, destIndex) => {
+  // Load boards when user authenticates
+  useEffect(() => {
+    if (isAuthenticated && getAuthToken()) {
+      loadBoards()
+    } else {
+      // Use guest data when not authenticated
+      setBoardData(guestData)
+      setBoardsList([
+        { id: 'board-1', name: 'Product Roadmap', icon: '🚀', color: 'sky' },
+        { id: 'board-2', name: 'Marketing Campaign', icon: '📣', color: 'coral' },
+        { id: 'board-3', name: 'Design System', icon: '🎨', color: 'violet' },
+      ])
+    }
+  }, [isAuthenticated])
+
+  const loadBoards = async () => {
+    setIsLoading(true)
+    try {
+      const data = await boardsApi.list()
+      setBoardsList(data.boards || [])
+    } catch (err) {
+      console.error('Failed to load boards:', err)
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const loadBoard = async (boardId) => {
+    if (!isAuthenticated) return
+
+    setIsLoading(true)
+    try {
+      const data = await boardsApi.get(boardId)
+      setBoardData(prev => ({
+        ...prev,
+        [boardId]: {
+          columns: data.columns || []
+        }
+      }))
+    } catch (err) {
+      console.error('Failed to load board:', err)
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const moveCard = useCallback(async (boardId, sourceColId, destColId, sourceIndex, destIndex) => {
+    // Get card before optimistic update
+    const board = boardData[boardId]
+    const sourceCol = board?.columns.find(c => c.id === sourceColId)
+    const card = sourceCol?.cards[sourceIndex]
+
+    // Optimistic update
     setBoardData(prev => {
       const board = prev[boardId]
       if (!board) return prev
 
-      const newColumns = [...board.columns]
+      const newColumns = JSON.parse(JSON.stringify(board.columns))
       const sourceCol = newColumns.find(c => c.id === sourceColId)
       const destCol = newColumns.find(c => c.id === destColId)
 
@@ -88,25 +149,37 @@ export function BoardProvider({ children }) {
         [boardId]: { ...board, columns: newColumns }
       }
     })
-  }, [])
 
-  const addCard = useCallback((boardId, columnId, cardData) => {
+    // Persist to API if authenticated
+    if (isAuthenticated && getAuthToken() && card) {
+      try {
+        await cardsApi.move(card.id, sourceColId, destColId, destIndex)
+      } catch (err) {
+        console.error('Failed to move card:', err)
+        // Reload board to sync state
+        loadBoard(boardId)
+      }
+    }
+  }, [isAuthenticated, boardData])
+
+  const addCard = useCallback(async (boardId, columnId, cardData) => {
+    const tempId = uuidv4()
+    const newCard = {
+      id: tempId,
+      title: typeof cardData === 'string' ? cardData : cardData.title,
+      description: typeof cardData === 'string' ? '' : (cardData.description || ''),
+      labels: typeof cardData === 'string' ? [] : (cardData.labels || []),
+      priority: typeof cardData === 'string' ? 'medium' : (cardData.priority || 'medium')
+    }
+
+    // Optimistic update
     setBoardData(prev => {
       const board = prev[boardId]
       if (!board) return prev
 
       const newColumns = board.columns.map(col => {
         if (col.id === columnId) {
-          return {
-            ...col,
-            cards: [...col.cards, {
-              id: uuidv4(),
-              title: typeof cardData === 'string' ? cardData : cardData.title,
-              description: typeof cardData === 'string' ? '' : (cardData.description || ''),
-              labels: typeof cardData === 'string' ? [] : (cardData.labels || []),
-              priority: typeof cardData === 'string' ? 'medium' : (cardData.priority || 'medium')
-            }]
-          }
+          return { ...col, cards: [...col.cards, newCard] }
         }
         return col
       })
@@ -116,9 +189,56 @@ export function BoardProvider({ children }) {
         [boardId]: { ...board, columns: newColumns }
       }
     })
-  }, [])
 
-  const updateCard = useCallback((boardId, columnId, cardId, updates) => {
+    // Persist to API if authenticated
+    if (isAuthenticated && getAuthToken()) {
+      try {
+        const result = await cardsApi.create(columnId, newCard)
+        // Update with real ID
+        setBoardData(prev => {
+          const board = prev[boardId]
+          if (!board) return prev
+
+          const newColumns = board.columns.map(col => {
+            if (col.id === columnId) {
+              return {
+                ...col,
+                cards: col.cards.map(c => c.id === tempId ? { ...c, id: result.card.id } : c)
+              }
+            }
+            return col
+          })
+
+          return {
+            ...prev,
+            [boardId]: { ...board, columns: newColumns }
+          }
+        })
+      } catch (err) {
+        console.error('Failed to add card:', err)
+        // Remove optimistic card on failure
+        setBoardData(prev => {
+          const board = prev[boardId]
+          if (!board) return prev
+
+          const newColumns = board.columns.map(col => {
+            if (col.id === columnId) {
+              return { ...col, cards: col.cards.filter(c => c.id !== tempId) }
+            }
+            return col
+          })
+
+          return {
+            ...prev,
+            [boardId]: { ...board, columns: newColumns }
+          }
+        })
+      }
+    }
+  }, [isAuthenticated])
+
+  const updateCard = useCallback(async (boardId, columnId, cardId, updates) => {
+    // Optimistic update
     setBoardData(prev => {
       const board = prev[boardId]
       if (!board) return prev
@@ -140,19 +260,27 @@ export function BoardProvider({ children }) {
         [boardId]: { ...board, columns: newColumns }
       }
     })
-  }, [])
 
-  const deleteCard = useCallback((boardId, columnId, cardId) => {
+    // Persist to API if authenticated
+    if (isAuthenticated && getAuthToken()) {
+      try {
+        await cardsApi.update(cardId, updates)
+      } catch (err) {
+        console.error('Failed to update card:', err)
+        loadBoard(boardId)
+      }
+    }
+  }, [isAuthenticated])
+
+  const deleteCard = useCallback(async (boardId, columnId, cardId) => {
+    // Optimistic update
     setBoardData(prev => {
       const board = prev[boardId]
       if (!board) return prev
 
       const newColumns = board.columns.map(col => {
         if (col.id === columnId) {
-          return {
-            ...col,
-            cards: col.cards.filter(card => card.id !== cardId)
-          }
+          return { ...col, cards: col.cards.filter(card => card.id !== cardId) }
         }
         return col
       })
@@ -162,9 +290,22 @@ export function BoardProvider({ children }) {
         [boardId]: { ...board, columns: newColumns }
       }
     })
-  }, [])
 
-  const addColumn = useCallback((boardId, title) => {
+    // Persist to API if authenticated
+    if (isAuthenticated && getAuthToken()) {
+      try {
+        await cardsApi.delete(cardId)
+      } catch (err) {
+        console.error('Failed to delete card:', err)
+        loadBoard(boardId)
+      }
+    }
+  }, [isAuthenticated])
+
+  const addColumn = useCallback(async (boardId, title) => {
+    const tempId = uuidv4()
+
+    // Optimistic update
     setBoardData(prev => {
       const board = prev[boardId]
       if (!board) return prev
@@ -173,17 +314,51 @@ export function BoardProvider({ children }) {
         ...prev,
         [boardId]: {
           ...board,
-          columns: [...board.columns, {
-            id: uuidv4(),
-            title,
-            cards: []
-          }]
+          columns: [...board.columns, { id: tempId, title, cards: [] }]
         }
       }
     })
-  }, [])
 
-  const renameColumn = useCallback((boardId, columnId, newTitle) => {
+    // Persist to API if authenticated
+    if (isAuthenticated && getAuthToken()) {
+      try {
+        const result = await columnsApi.create(boardId, title)
+        // Update with real ID
+        setBoardData(prev => {
+          const board = prev[boardId]
+          if (!board) return prev
+
+          return {
+            ...prev,
+            [boardId]: {
+              ...board,
+              columns: board.columns.map(col =>
+                col.id === tempId ? { ...col, id: result.column.id } : col
+              )
+            }
+          }
+        })
+      } catch (err) {
+        console.error('Failed to add column:', err)
+        // Remove optimistic column on failure
+        setBoardData(prev => {
+          const board = prev[boardId]
+          if (!board) return prev
+
+          return {
+            ...prev,
+            [boardId]: {
+              ...board,
+              columns: board.columns.filter(col => col.id !== tempId)
+            }
+          }
+        })
+      }
+    }
+  }, [isAuthenticated])
+
+  const renameColumn = useCallback(async (boardId, columnId, newTitle) => {
+    // Optimistic update
     setBoardData(prev => {
       const board = prev[boardId]
       if (!board) return prev
@@ -197,9 +372,23 @@ export function BoardProvider({ children }) {
         [boardId]: { ...board, columns: newColumns }
       }
     })
-  }, [])
 
-  const deleteColumn = useCallback((boardId, columnId) => {
+    // Persist to API if authenticated
+    if (isAuthenticated && getAuthToken()) {
+      try {
+        await columnsApi.update(columnId, { title: newTitle })
+      } catch (err) {
+        console.error('Failed to rename column:', err)
+        loadBoard(boardId)
+      }
+    }
+  }, [isAuthenticated])
+
+  const deleteColumn = useCallback(async (boardId, columnId) => {
+    // Store for rollback
+    const prevBoard = boardData[boardId]
+
+    // Optimistic update
     setBoardData(prev => {
       const board = prev[boardId]
       if (!board) return prev
@@ -212,9 +401,27 @@ export function BoardProvider({ children }) {
         }
       }
     })
-  }, [])
 
-  const moveColumn = useCallback((boardId, fromIndex, toIndex) => {
+    // Persist to API if authenticated
+    if (isAuthenticated && getAuthToken()) {
+      try {
+        await columnsApi.delete(columnId)
+      } catch (err) {
+        console.error('Failed to delete column:', err)
+        // Rollback
+        setBoardData(prev => ({
+          ...prev,
+          [boardId]: prevBoard
+        }))
+      }
+    }
+  }, [isAuthenticated, boardData])
+
+  const moveColumn = useCallback(async (boardId, fromIndex, toIndex) => {
+    // Get the current order for API call
+    const board = boardData[boardId]
+
+    // Optimistic update
     setBoardData(prev => {
       const board = prev[boardId]
       if (!board) return prev
@@ -228,13 +435,29 @@ export function BoardProvider({ children }) {
         [boardId]: { ...board, columns: newColumns }
       }
     })
-  }, [])
 
-  const initializeBoard = useCallback((boardId) => {
-    setBoardData(prev => {
-      if (prev[boardId]) return prev // Board already exists
+    // Persist to API if authenticated
+    if (isAuthenticated && getAuthToken() && board) {
+      try {
+        const newOrder = [...board.columns]
+        const [moved] = newOrder.splice(fromIndex, 1)
+        newOrder.splice(toIndex, 0, moved)
+        await boardsApi.reorderColumns(boardId, newOrder.map(c => c.id))
+      } catch (err) {
+        console.error('Failed to reorder columns:', err)
+        loadBoard(boardId)
+      }
+    }
+  }, [isAuthenticated, boardData])
 
-      return {
+  const initializeBoard = useCallback(async (boardId) => {
+    if (boardData[boardId]) return // Board already loaded
+
+    if (isAuthenticated && getAuthToken()) {
+      await loadBoard(boardId)
+    } else {
+      // Guest mode - create default columns
+      setBoardData(prev => ({
         ...prev,
         [boardId]: {
           columns: [
@@ -243,20 +466,91 @@ export function BoardProvider({ children }) {
             { id: uuidv4(), title: 'Done', cards: [] },
           ]
         }
-      }
-    })
-  }, [])
+      }))
+    }
+  }, [isAuthenticated, boardData])
 
-  const deleteBoard = useCallback((boardId) => {
+  const createBoard = useCallback(async (name, icon = '📋', color = 'sky') => {
+    if (isAuthenticated && getAuthToken()) {
+      try {
+        const result = await boardsApi.create(name, icon, color)
+        setBoardsList(prev => [...prev, result.board])
+        setBoardData(prev => ({
+          ...prev,
+          [result.board.id]: {
+            columns: result.columns.map(c => ({ ...c, cards: [] }))
+          }
+        }))
+        return result.board
+      } catch (err) {
+        console.error('Failed to create board:', err)
+        throw err
+      }
+    } else {
+      // Guest mode
+      const newBoard = {
+        id: uuidv4(),
+        name,
+        icon,
+        color
+      }
+      setBoardsList(prev => [...prev, newBoard])
+      setBoardData(prev => ({
+        ...prev,
+        [newBoard.id]: {
+          columns: [
+            { id: uuidv4(), title: 'To Do', cards: [] },
+            { id: uuidv4(), title: 'In Progress', cards: [] },
+            { id: uuidv4(), title: 'Done', cards: [] },
+          ]
+        }
+      }))
+      return newBoard
+    }
+  }, [isAuthenticated])
+
+  const renameBoard = useCallback(async (boardId, newName) => {
+    // Optimistic update
+    setBoardsList(prev =>
+      prev.map(b => b.id === boardId ? { ...b, name: newName } : b)
+    )
+
+    if (isAuthenticated && getAuthToken()) {
+      try {
+        await boardsApi.update(boardId, { name: newName })
+      } catch (err) {
+        console.error('Failed to rename board:', err)
+        loadBoards()
+      }
+    }
+  }, [isAuthenticated])
+
+  const deleteBoard = useCallback(async (boardId) => {
+    // Optimistic update
+    setBoardsList(prev => prev.filter(b => b.id !== boardId))
     setBoardData(prev => {
       const { [boardId]: _, ...rest } = prev
       return rest
     })
-  }, [])
+
+    if (isAuthenticated && getAuthToken()) {
+      try {
+        await boardsApi.delete(boardId)
+      } catch (err) {
+        console.error('Failed to delete board:', err)
+        loadBoards()
+      }
+    }
+  }, [isAuthenticated])
 
   return (
     <BoardContext.Provider value={{
       boardData,
+      boardsList,
+      isLoading,
+      error,
+      loadBoard,
+      loadBoards,
       moveCard,
       moveColumn,
       addCard,
@@ -266,6 +560,8 @@ export function BoardProvider({ children }) {
       renameColumn,
       deleteColumn,
       initializeBoard,
+      createBoard,
+      renameBoard,
       deleteBoard
     }}>
       {children}
