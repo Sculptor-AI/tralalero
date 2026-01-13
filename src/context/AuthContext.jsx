@@ -1,9 +1,10 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { auth as authApi, setAuthToken, getAuthToken } from '../utils/api'
 
 const AuthContext = createContext(null)
 
-const DEFAULT_USER = {
-  id: 'user-1',
+const GUEST_USER = {
+  id: null,
   name: 'Guest User',
   email: '',
   avatar: null,
@@ -11,59 +12,118 @@ const DEFAULT_USER = {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(DEFAULT_USER)
-  const [isLoading, setIsLoading] = useState(false)
+  const [user, setUser] = useState(GUEST_USER)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = getAuthToken()
+      if (!token) {
+        setIsLoading(false)
+        return
+      }
+
+      try {
+        const data = await authApi.me()
+        setUser({
+          ...data.user,
+          isGuest: false,
+        })
+      } catch (err) {
+        // Token is invalid, clear it
+        setAuthToken(null)
+        console.log('Session expired or invalid')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    checkAuth()
+  }, [])
 
   const login = useCallback(async (email, password) => {
     setIsLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 800))
+    setError(null)
 
-    // For demo purposes, accept any email/password
-    setUser({
-      id: `user-${Date.now()}`,
-      name: email.split('@')[0],
-      email,
-      avatar: null,
-      isGuest: false,
-    })
-    setIsLoading(false)
-    return { success: true }
+    try {
+      const data = await authApi.login(email, password)
+      setUser({
+        ...data.user,
+        isGuest: false,
+      })
+      return { success: true }
+    } catch (err) {
+      setError(err.message)
+      return { success: false, error: err.message }
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
   const signup = useCallback(async (name, email, password) => {
     setIsLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 800))
+    setError(null)
 
-    setUser({
-      id: `user-${Date.now()}`,
-      name,
-      email,
-      avatar: null,
-      isGuest: false,
-    })
-    setIsLoading(false)
-    return { success: true }
+    try {
+      const data = await authApi.signup(name, email, password)
+      setUser({
+        ...data.user,
+        isGuest: false,
+      })
+      return { success: true }
+    } catch (err) {
+      setError(err.message)
+      return { success: false, error: err.message }
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
-  const logout = useCallback(() => {
-    setUser(DEFAULT_USER)
+  const logout = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      await authApi.logout()
+    } catch (err) {
+      console.error('Logout error:', err)
+    } finally {
+      setUser(GUEST_USER)
+      setIsLoading(false)
+    }
   }, [])
 
-  const updateProfile = useCallback((updates) => {
-    setUser(prev => ({ ...prev, ...updates }))
+  const updateProfile = useCallback(async (updates) => {
+    setError(null)
+
+    try {
+      const data = await authApi.updateProfile(updates)
+      setUser(prev => ({
+        ...prev,
+        ...data.user,
+      }))
+      return { success: true }
+    } catch (err) {
+      setError(err.message)
+      return { success: false, error: err.message }
+    }
+  }, [])
+
+  const clearError = useCallback(() => {
+    setError(null)
   }, [])
 
   return (
     <AuthContext.Provider value={{
       user,
       isLoading,
+      error,
       isAuthenticated: !user.isGuest,
       login,
       signup,
       logout,
       updateProfile,
+      clearError,
     }}>
       {children}
     </AuthContext.Provider>
