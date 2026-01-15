@@ -28,7 +28,7 @@ A modern, Kanban-style task management application built with React and Vite. Or
 
 1.  Clone the repository:
     ```bash
-    git clone https://github.com/yourusername/tralalero.git
+    git clone https://github.com/Sculptor-AI/tralalero.git
     cd tralalero
     ```
 
